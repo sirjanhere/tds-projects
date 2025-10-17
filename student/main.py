@@ -106,6 +106,40 @@ def push_files_to_repo(repo_name: str, files: list[dict], round: int):
         if response.status_code != 201:
             raise Exception(f"Failed to push file {file_name}: {response.status_code}, {response.text}")
 
+
+def notify_evaluation_server(data: dict, repo_name: str, status: str = "success", extra: dict | None = None):
+    """Send repo & commit details to the evaluation_url from the TDS request."""
+    evaluation_url = data.get("evaluation_url")
+    if not evaluation_url:
+        print("No evaluation URL provided.")
+        return
+
+    # Build repo and pages URL
+    repo_url = f"https://github.com/sirjanhere/{repo_name}"
+    pages_url = f"https://sirjanhere.github.io/{repo_name}/"
+
+    payload = {
+        "email": data.get("email"),
+        "task": data.get("task"),
+        "round": data.get("round"),
+        "nonce": data.get("nonce"),
+        "repo_url": repo_url,
+        "commit_sha": get_sha_of_latest_commit(repo_name),
+        "pages_url": pages_url,
+    }
+
+    if extra:
+        payload.update(extra)
+
+    try:
+        response = requests.post(evaluation_url, json=payload, timeout=10)
+        if response.status_code != 200:
+            print(f"Evaluation callback failed: {response.status_code}, {response.text}")
+        else:
+            print("✅ Evaluation server notified successfully.")
+    except Exception as e:
+        print(f"Error notifying evaluation server: {e}")
+
 def write_code_with_llm():
     # hardcode with a simple file for now
     # TODO: integrate with LLM to generate code
@@ -134,6 +168,7 @@ def round1(data):
     create_github_repo(f"{data['task']}_{data['nonce']}")
     enable_github_pages(f"{data['task']}_{data['nonce']}")
     push_files_to_repo(f"{data['task']}_{data['nonce']}", files, 1)
+    notify_evaluation_server(data, f"{data['task']}_{data['nonce']}")
 
 def round2(data):
     pass
